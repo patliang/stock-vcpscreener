@@ -208,7 +208,7 @@ def create_stock_database(stock_list, csvdir_name, source):
             except Exception as inst:
                 print(inst)
                 with open(csvdir_name+stock.strip().ljust(5,'_')+'.txt', 'w') as out_file:
-                    out_file.write(inst)
+                    out_file.write(str(inst))
                     out_file.write(f'Last try on {end_date}')
         else:
             print(f"File {outfilename} exists")
@@ -290,4 +290,3 @@ def update_stock_database(stock_list, csvdir_name, source, trade_day, override=F
         lastupdate.to_csv(csvdir_name+"last_update.dat", mode='w', index=False)
     else:
         print("No update needed for the database!")
-
