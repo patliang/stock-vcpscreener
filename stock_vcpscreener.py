@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from pandas_datareader import data as pdr
 import yfinance as yf
+import threading    
 import pandas as pd
 import requests
 from datetime import datetime, timedelta, date
@@ -10,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import mplfinance as mpf
 import sys
-import os
+import os 
 
 from stock_vcpscreener.vcp_util.util import gen_report_front_page, gen_report_output_page, gen_report_combine, \
                                             gen_report_breadth_page, \
@@ -20,6 +21,13 @@ from stock_vcpscreener.vcp_util.stat import compute_rs_rank, compute_rs_rating
 from stock_vcpscreener.vcp_util.db import create_index_database, update_index_database, \
                                           create_stock_database, update_stock_database, \
                                           get_index_lastday, get_stock_data_specific_date
+
+
+# Imports 
+from yahoo_fin import stock_info as si 
+yf.pdr_override()
+ 
+
 # if not sys.warnoptions:
 #     import warnings
 #     warnings.simplefilter("ignore")
@@ -67,7 +75,47 @@ class StockVCPScreener:
         self.end_date = self.date_study
 
         self.selected_stock_rs_rank_list = pd.DataFrame()
+        
+    # based on the list of stocks, obtain history data and store as csv files
+    def get_csv(self):
+        tickers = si.tickers_nasdaq() + si.tickers_other()
+        tickers.sort()
+        tickers = [item.replace(".", "-") for item in tickers] # Yahoo Finance uses dashes instead of dots 
+        exportList = pd.DataFrame(columns=['Stock', "RS_Rating", "50 Day MA", "150 Day Ma", 
+                                            "200 Day MA", "52 Week Low", "52 week High"]) 
+        return tickers
 
+    def get_ticker(self, tickers, thread_no, start, end):
+        start_date = datetime.now() - timedelta(days=3650)
+        end_date = date.today()
+        # Find top 30% performing stocks (relative to the S&P 500)
+        for ticker in tickers[start:end]:
+            try:
+                # Download historical data as CSV for each stock (makes the process faster) 
+                df = pdr.get_data_yahoo(ticker, start_date, end_date) 
+                df.to_csv(f'{self.csvdatmain_name}'+ticker.strip().ljust(5,'_')+'.csv') 
+            except Exception as e:
+                print (e)
+                print(f"Error downloading data for {ticker}")
+                pass 
+            
+    # define thread  
+    def split_processing(self, items, num_splits=5):  
+        split_size = len(items) // num_splits                                       
+        threads = []                                                                
+        for i in range(num_splits):                                                 
+            # determine the indices of the list this thread will handle             
+            start = i * split_size                                                  
+            # special case on the last chunk to account for uneven splits           
+            end = None if i+1 == num_splits else (i+1) * split_size                 
+            # create the thread                                                     
+            threads.append(                                                         
+                threading.Thread(target=self.get_ticker, args=(items, str(i),  start, end)))         
+            threads[-1].start() # start the thread we just created                  
+
+        # wait for all threads to finish                                            
+        for t in threads:                                                           
+            t.join() 
 
     def check_directory(self):
         '''
@@ -131,8 +179,8 @@ class StockVCPScreener:
             lastupdate_day = lastupdate['Date'][0]
             if (lastupdate_day.date() - self.date_study).days >= 0:
                 # Second check - check last day of the GSPC index dataset
-                index_lastupdate_day = get_index_lastday(self.csvdatmain_name)
-                if (index_lastupdate_day.date() - self.date_study).days >= 0:
+                index_lastupdate_day = get_index_lastday(self.csvdatmain_name) 
+                if (lastupdate_day.date() - self.date_study).days >= 0:
                     return 1
                 else:
                     print("Please wait until yahoo finance update today's data.")
@@ -174,16 +222,23 @@ class StockVCPScreener:
         try:
             for ind, stock in enumerate(self.stock_list):
                 infilename = stock.strip().ljust(5,'_')+'.csv'
+                
+                #fix filename issue 
+                #import pathlib
+                infilename_alt = stock + '.csv' 
+                if os.path.exists(self.csvdatmain_name+infilename_alt): 
+                    if not os.path.exists(self.csvdatmain_name+infilename): 
+                        os.rename(self.csvdatmain_name+infilename_alt, self.csvdatmain_name+infilename)
 
-                if os.path.exists(self.csvdatmain_name+infilename):
+                if os.path.exists(self.csvdatmain_name+infilename): 
                     # Read the data from the csv database
                     df = pd.read_csv(self.csvdatmain_name+infilename, header=0)
                     df['Date'] = pd.to_datetime(df['Date'])
                     df.set_index('Date', inplace=True)
                     df = df.loc[self.start_date: self.end_date]
                     # df = pdr.get_data_yahoo(stock, start=start_date, end=end_date)
-                else:
-                    # print(f'Cannot read csv. Skipping {stock}')
+                else: 
+                    #print(f'Cannot read csv. Skipping {stock}')
                     continue
 
                 # Check if the df contains enough number of rows. If yes, proceed, else continue
@@ -408,15 +463,23 @@ class StockVCPScreener:
 # Start of the program
 if __name__ == '__main__':
 
-    # Read in companylist.csv
-    data = pd.read_csv('stock_vcpscreener/Tickers.csv', header=0)
-    stock_list = list(data.Symbol)
+    # Get full list of stocks from nasdaq ftp
+    stock_list = si.tickers_nasdaq() + si.tickers_other()
+    stock_list.sort()
+    stock_list = [item.replace(".", "-") for item in stock_list]   
+    
 
     # Get the last trade day (take yesterday) from current time
     last_weekday = get_last_trade_day().date() - timedelta(days=1)
 
     # Initiate StockVCPScreener
     svs = StockVCPScreener(last_weekday, stock_list)
+    
+    #get the list of tickers
+    tickers = svs.get_csv()
+    
+    #multi-threading download csv files for each ticker
+    svs.split_processing(tickers,5)  
 
     # Checks
     svs.check_directory()
@@ -430,6 +493,3 @@ if __name__ == '__main__':
     # Generate report
     svs.generate_report()
     svs.generate_dash_csv()
-
-
-
