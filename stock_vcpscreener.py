@@ -47,7 +47,8 @@ class StockVCPScreener:
     cdir_path = toplevel_path+'./'                     # Current dir with list of tickers (companylist.csv)
     dsel_info_name = toplevel_path+'./daily_selected_stock_info.csv' # Output file for the daily stock statistics
     dsel_info_prefix = 'selected_stock_'             # Output file for dash board stock info tables
-    source = 'yfinance'                  # Yfinance or stooq
+    source = 'yfinance'                              # Yfinance or stooq
+    thread_numbers = 5                               # Number of threadings to download history data into csv files
 
 
     def __init__(self, in_sel_date, in_stock_list):
@@ -479,7 +480,7 @@ if __name__ == '__main__':
     tickers = svs.get_csv()
     
     #multi-threading download csv files for each ticker
-    svs.split_processing(tickers,5)  
+    svs.split_processing(tickers,svs.thread_numbers)  
 
     # Checks
     svs.check_directory()
