@@ -12,6 +12,7 @@ import numpy as np
 import mplfinance as mpf
 import sys
 import os 
+from tqdm import tqdm
 
 from stock_vcpscreener.vcp_util.util import gen_report_front_page, gen_report_output_page, gen_report_combine, \
                                             gen_report_breadth_page, \
@@ -25,7 +26,7 @@ from stock_vcpscreener.vcp_util.db import create_index_database, update_index_da
 
 # Imports 
 from yahoo_fin import stock_info as si 
-yf.pdr_override()
+#yf.pdr_override()
  
 
 # if not sys.warnoptions:
@@ -48,7 +49,7 @@ class StockVCPScreener:
     dsel_info_name = toplevel_path+'./daily_selected_stock_info.csv' # Output file for the daily stock statistics
     dsel_info_prefix = 'selected_stock_'             # Output file for dash board stock info tables
     source = 'yfinance'                              # Yfinance or stooq
-    thread_numbers = 5                               # Number of threadings to download history data into csv files
+    thread_numbers = 1                              # Number of threadings to download history data into csv files
 
 
     def __init__(self, in_sel_date, in_stock_list):
@@ -76,48 +77,7 @@ class StockVCPScreener:
         self.end_date = self.date_study
 
         self.selected_stock_rs_rank_list = pd.DataFrame()
-        
-    # based on the list of stocks, obtain history data and store as csv files
-    def get_csv(self):
-        tickers = si.tickers_nasdaq() + si.tickers_other()
-        tickers.sort()
-        tickers = [item.replace(".", "-") for item in tickers] # Yahoo Finance uses dashes instead of dots 
-        exportList = pd.DataFrame(columns=['Stock', "RS_Rating", "50 Day MA", "150 Day Ma", 
-                                            "200 Day MA", "52 Week Low", "52 week High"]) 
-        return tickers
-
-    def get_ticker(self, tickers, thread_no, start, end):
-        start_date = datetime.now() - timedelta(days=3650)
-        end_date = date.today()
-        # Find top 30% performing stocks (relative to the S&P 500)
-        for ticker in tickers[start:end]:
-            try:
-                # Download historical data as CSV for each stock (makes the process faster) 
-                df = pdr.get_data_yahoo(ticker, start_date, end_date) 
-                df.to_csv(f'{self.csvdatmain_name}'+ticker.strip().ljust(5,'_')+'.csv') 
-            except Exception as e:
-                print (e)
-                print(f"Error downloading data for {ticker}")
-                pass 
-            
-    # define thread  
-    def split_processing(self, items, num_splits=5):  
-        split_size = len(items) // num_splits                                       
-        threads = []                                                                
-        for i in range(num_splits):                                                 
-            # determine the indices of the list this thread will handle             
-            start = i * split_size                                                  
-            # special case on the last chunk to account for uneven splits           
-            end = None if i+1 == num_splits else (i+1) * split_size                 
-            # create the thread                                                     
-            threads.append(                                                         
-                threading.Thread(target=self.get_ticker, args=(items, str(i),  start, end)))         
-            threads[-1].start() # start the thread we just created                  
-
-        # wait for all threads to finish                                            
-        for t in threads:                                                           
-            t.join() 
-
+                  
     def check_directory(self):
         '''
         Create the directories if not available
@@ -147,24 +107,42 @@ class StockVCPScreener:
             update_index_database(self.csvdatmain_name, self.source, self.date_study)
 
 
-    def check_stock_database(self, source, create=False, update=True):
+    # define thread  
+    def split_processing(self, num_splits=5, source='yfinance', create=False, update=True):  
+        split_size = len(self.stock_list) // num_splits                                       
+        threads = []                                                                
+        for i in range(num_splits):                                                 
+            # determine the indices of the list this thread will handle             
+            start = i * split_size                                                  
+            # special case on the last chunk to account for uneven splits           
+            end = None if i+1 == num_splits else (i+1) * split_size                 
+            # create the thread                                                     
+            threads.append(                                                         
+                threading.Thread(target=self.check_stock_database, args=(start, end, source, create, update)))         
+            threads[-1].start() # start the thread we just created                  
+
+        # wait for all threads to finish                                            
+        for t in threads:                                                           
+            t.join() 
+
+    def check_stock_database(self, start, end, source, create=False, update=True):
         '''
         Check if the stock database exist
         Create / Update the database
-        '''
+        ''' 
         if create:
             print('Building CSV data')
             if source == 'yfinance':
-                create_stock_database(self.stock_list, self.csvdatmain_name, self.source)
+                create_stock_database(self.stock_list[start:end], self.csvdatmain_name, self.source)
             elif source == 'stooq':
-                create_stock_database(self.stock_list, self.csvdatstooq_name, self.source)
+                create_stock_database(selfstock_list[start:end], self.csvdatstooq_name, self.source)
 
         if update:
             print('Updating CSV data')
             if source == 'yfinance':
-                update_stock_database(self.stock_list, self.csvdatmain_name, self.source, self.date_study)  #override=True
+                update_stock_database(selfstock_list[start:end], self.csvdatmain_name, self.source, self.date_study)  #override=True
             elif source == 'stooq':
-                update_stock_database(self.stock_list, self.csvdatstooq_name, self.source, self.date_study)
+                update_stock_database(selfstock_list[start:end], self.csvdatstooq_name, self.source, self.date_study)
 
 
     def verify_report_feasibility(self):
@@ -477,15 +455,15 @@ if __name__ == '__main__':
     svs = StockVCPScreener(last_weekday, stock_list)
     
     #get the list of tickers
-    tickers = svs.get_csv()
+    #tickers = svs.get_csv()
     
-    #multi-threading download csv files for each ticker
-    svs.split_processing(tickers,svs.thread_numbers)  
 
     # Checks
     svs.check_directory()
     svs.check_index_database()
-    svs.check_stock_database('yfinance')
+    #svs.check_stock_database('yfinance', True, False)
+    #multi-threading download csv files for each ticker
+    svs.split_processing(svs.thread_numbers, 'yfinance', True, False)  
 
     # Select Stock
     # normally with overwrite = False
