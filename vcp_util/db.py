@@ -139,26 +139,31 @@ def get_stock_data_specific_date(csvdir_name, stock, in_date, minmax_range=False
 
     if os.path.exists(csvdir_name+infilename):
         df = pd.read_csv(csvdir_name+infilename, header=0)
-        df['Date'] = pd.to_datetime(df['Date'])
-        df['Dateonly'] = df['Date'].dt.date
+        df['Date'] = pd.to_datetime(df['Date'],format='%Y-%m-%d')
+        df['Dateonly'] = df['Date']
         df.set_index('Date', inplace=True)
+        
+        in_date = datetime.combine(in_date, datetime.min.time()) 
 
-        if in_date in df.index:
+        #if in_date in df.index:
+        try:
             sel_df = df.loc[in_date]
             sel_df['Ticker'] = stock.strip()
+            print('debug1')
 
             if percent_change:
                 tmp_df = df[df['Dateonly'] <= in_date]
                 sel_df['Change'] = tmp_df['Adj Close'].iloc[-1] - tmp_df['Adj Close'].iloc[-2]
                 sel_df['Change (%)'] = (tmp_df['Adj Close'].iloc[-1] - tmp_df['Adj Close'].iloc[-2]) / tmp_df['Adj Close'].iloc[-2]
-
+            print('debug2')
             if minmax_range:
                 sel_df['52 Week Min'] = min(df['Adj Close'].loc[in_date - timedelta(days=365): in_date])
                 sel_df['52 Week Max'] = max(df['Adj Close'].loc[in_date - timedelta(days=365): in_date])
 
+            print('debug3')
             sel_df = sel_df.drop('Dateonly')
-        else:
-            print('Specified date not in the data')
+        except Exception as e:
+            print('Specified date not in the data with error ', e)
             return np.nan
     else:
         print('Stock not available')
