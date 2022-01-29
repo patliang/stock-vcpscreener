@@ -13,8 +13,7 @@ import subprocess
 from datetime import datetime, timedelta, date
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import AnchoredText
-import seaborn as sns
-from datetime import datetime
+import seaborn as sns 
 
 
 def get_last_trade_day():
