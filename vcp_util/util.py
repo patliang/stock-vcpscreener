@@ -14,20 +14,37 @@ from datetime import datetime, timedelta, date
 import matplotlib.pyplot as plt
 from matplotlib.offsetbox import AnchoredText
 import seaborn as sns 
+import pandas_market_calendars as mcal
 
-
-def get_last_trade_day():
+def get_last_trade_day(offset=0):
     '''
     Get last trade day using current UTC time
+    offset: get how many trading days prior to the current date
     '''
-    curr_day = datetime.utcnow() - timedelta(hours=5)       # UTC -5, i.e. US NY timezone
+    
+    #get current date and time
+    curr_day = datetime.utcnow() - timedelta(hours=5) -  timedelta(days=offset)
+    curr_day_only = curr_day.date()
+    curr_time_only = curr_day.time()
+    
+    # Create a calendar
+    nyse = mcal.get_calendar('NYSE') 
+    trading_calendar = nyse.schedule(start_date=curr_day.date() - timedelta(days = 3650) , end_date=curr_day.date()) 
 
-    # If sat or sun, return the closest weekday (i.e. friday)
-    if curr_day.isoweekday() in set((6, 7)):
-        trade_day = curr_day - timedelta(curr_day.isoweekday() % 5)
+
+    #latest trading day in the calendar
+    latest_trading_day = trading_calendar[trading_calendar['market_close'].dt.date<=curr_day.date()].iloc[-1]['market_close'].date()
+    latest_trading_time = trading_calendar[trading_calendar['market_close'].dt.date<=curr_day.date()].iloc[-1]['market_close'].time()
+
+    #if currently is a trading day and we are in the trading window
+    if (curr_day_only == latest_trading_day) and (curr_time_only <= latest_trading_time):
+        #get the day before the last trading day in the calendar
+        last_trading_day = trading_calendar[trading_calendar['market_close'].dt.date<=curr_day.date()].iloc[-2]['market_close'].date()
     else:
-        trade_day = curr_day
-    return trade_day
+        #if today is not a trading day then get the last trading day in the calendar
+        last_trading_day = trading_calendar[trading_calendar['market_close'].dt.date<=curr_day.date()].iloc[-1]['market_close'].date()
+
+    return last_trading_day
 
 
 def convert_strdate_datetime(in_strdate):
