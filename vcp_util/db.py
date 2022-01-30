@@ -37,7 +37,7 @@ def create_index_database(csvdir_name, source):
     else:
         print('Please select either yfinance or stooq')
 
-    start_date = trade_day.date() - timedelta(days=365 + 7)
+    start_date = trade_day.date() - timedelta(days=3650)
     end_date = trade_day.date() + timedelta(days=1)         #+1 to include the current day
 
     if not os.path.exists(csvdir_name+outfilename):
@@ -183,7 +183,7 @@ def create_stock_database(stock_list, csvdir_name, source):
         lastupdate['Date']=pd.to_datetime(lastupdate['Date'])
         lastupdate_day = lastupdate['Date'][0]
     else:
-        lastupdate = pd.DataFrame([trade_day.date() - timedelta(days=365+7)], columns=['Date'])
+        lastupdate = pd.DataFrame([trade_day.date() - timedelta(days=3650)], columns=['Date'])
         lastupdate_day = lastupdate['Date'][0]
 
     # Read in the companylist.csv
@@ -192,7 +192,7 @@ def create_stock_database(stock_list, csvdir_name, source):
 
     for stock in stock_list:
         outfilename = stock.strip().ljust(5,'_')+'.csv'
-        start_date = trade_day.date() - timedelta(days=365 + 7)     # Do one years and 7 days
+        start_date = trade_day.date() - timedelta(days=3650)     # Do one years and 7 days
         end_date = trade_day.date() +timedelta(days=1)
         if not os.path.exists(csvdir_name+outfilename):
             print(f"Downloading info on {stock} to {outfilename}")
