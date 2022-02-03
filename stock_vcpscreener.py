@@ -73,7 +73,7 @@ class StockVCPScreener:
         self.selected_stock_list = pd.DataFrame(columns=["Stock", "Index", "RS Rating", "RS Rating 2", "RS Rating 3", "50 Day MA", "150 Day Ma", "200 Day MA", \
                                    "52 Week Low", "52 week High"])
 
-        self.start_date = self.date_study - timedelta(days=365)
+        self.start_date = self.date_study - timedelta(days=365 + 7)
         self.end_date = self.date_study
 
         self.selected_stock_rs_rank_list = pd.DataFrame()
@@ -135,14 +135,14 @@ class StockVCPScreener:
             if source == 'yfinance':
                 create_stock_database(self.stock_list[start:end], self.csvdatmain_name, self.source)
             elif source == 'stooq':
-                create_stock_database(selfstock_list[start:end], self.csvdatstooq_name, self.source)
+                create_stock_database(self.stock_list[start:end], self.csvdatstooq_name, self.source)
 
         if update:
             print('Updating CSV data')
             if source == 'yfinance':
-                update_stock_database(selfstock_list[start:end], self.csvdatmain_name, self.source, self.date_study)  #override=True
+                update_stock_database(self.stock_list[start:end], self.csvdatmain_name, self.source, self.date_study)  #override=True
             elif source == 'stooq':
-                update_stock_database(selfstock_list[start:end], self.csvdatstooq_name, self.source, self.date_study)
+                update_stock_database(self.stock_list[start:end], self.csvdatstooq_name, self.source, self.date_study)
 
 
     def verify_report_feasibility(self):
@@ -164,7 +164,7 @@ class StockVCPScreener:
                 else:
                     print("Please wait until yahoo finance update today's data.")
             else:
-                print("Please update the stock database.")
+                print("Please update the stock database. lastupdate_day.date()=", lastupdate_day.date(), ";self.date_study=", self.date_study)
                 return 0
         else:
             print('Cannot find the last update file. Please build the database first')
@@ -449,26 +449,37 @@ if __name__ == '__main__':
     
 
     # Get the last trade day (take yesterday) from current time
-    last_weekday = get_last_trade_day().date() - timedelta(days=1)
-
-    # Initiate StockVCPScreener
-    svs = StockVCPScreener(last_weekday, stock_list)
+    #last_weekday = get_last_trade_day().date() - timedelta(days=1)
+    i=1
+    report_date = get_last_trade_day(i) 
+    last_trade_date = get_last_trade_day() 
     
-    #get the list of tickers
-    #tickers = svs.get_csv()
-    
+    #get historical reports 
+    tmp_date = report_date
+    while (report_date <= last_trade_date and i >= 0):
+        if tmp_date != report_date:
+            # Initiate StockVCPScreener
+            svs = StockVCPScreener(report_date, stock_list)
+	    
+            #get the list of tickers
+            #tickers = svs.get_csv()
 
-    # Checks
-    svs.check_directory()
-    svs.check_index_database()
-    #svs.check_stock_database('yfinance', True, False)
-    #multi-threading download csv files for each ticker
-    svs.split_processing(svs.thread_numbers, 'yfinance', True, False)  
+            # Checks
+            svs.check_directory()
+            svs.check_index_database() 
+	          #multi-threading download csv files for each ticker
+            svs.split_processing(svs.thread_numbers, 'yfinance')  
 
-    # Select Stock
-    # normally with overwrite = False
-    svs.select_stock(overwrite=True)
+	    # Select Stock
+	    # normally with overwrite = False
+            svs.select_stock(overwrite=False)
 
-    # Generate report
-    svs.generate_report()
-    svs.generate_dash_csv()
+	    # Generate report
+            svs.generate_report()
+            svs.generate_dash_csv()
+	    
+	#if the trading date is the same (holiday/weekends,etc) then get the next date
+        i=i-1
+        tmp_date = report_date
+        report_date = get_last_trade_day(i) 
+        print(report_date)
