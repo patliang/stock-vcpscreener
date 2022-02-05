@@ -106,26 +106,9 @@ class StockVCPScreener:
         if update:
             update_index_database(self.csvdatmain_name, self.source, self.date_study)
 
+ 
 
-    # define thread  
-    def split_processing(self, num_splits=5, source='yfinance', create=False, update=True):  
-        split_size = len(self.stock_list) // num_splits                                       
-        threads = []                                                                
-        for i in range(num_splits):                                                 
-            # determine the indices of the list this thread will handle             
-            start = i * split_size                                                  
-            # special case on the last chunk to account for uneven splits           
-            end = None if i+1 == num_splits else (i+1) * split_size                 
-            # create the thread                                                     
-            threads.append(                                                         
-                threading.Thread(target=self.check_stock_database, args=(start, end, source, create, update)))         
-            threads[-1].start() # start the thread we just created                  
-
-        # wait for all threads to finish                                            
-        for t in threads:                                                           
-            t.join() 
-
-    def check_stock_database(self, start, end, source, create=False, update=True):
+    def check_stock_database(self, source, create=False, update=True):
         '''
         Check if the stock database exist
         Create / Update the database
@@ -133,16 +116,16 @@ class StockVCPScreener:
         if create:
             print('Building CSV data')
             if source == 'yfinance':
-                create_stock_database(self.stock_list[start:end], self.csvdatmain_name, self.source)
+                create_stock_database(self.stock_list, self.csvdatmain_name, self.source)
             elif source == 'stooq':
-                create_stock_database(self.stock_list[start:end], self.csvdatstooq_name, self.source)
+                create_stock_database(self.stock_list, self.csvdatstooq_name, self.source)
 
         if update:
             print('Updating CSV data')
             if source == 'yfinance':
-                update_stock_database(self.stock_list[start:end], self.csvdatmain_name, self.source, self.date_study)  #override=True
+                update_stock_database(self.stock_list, self.csvdatmain_name, self.source, self.date_study)  #override=True
             elif source == 'stooq':
-                update_stock_database(self.stock_list[start:end], self.csvdatstooq_name, self.source, self.date_study)
+                update_stock_database(self.stock_list, self.csvdatstooq_name, self.source, self.date_study)
 
 
     def verify_report_feasibility(self):
@@ -450,7 +433,7 @@ if __name__ == '__main__':
 
     # Get the last trade day (take yesterday) from current time
     #last_weekday = get_last_trade_day().date() - timedelta(days=1)
-    i=1
+    i=5
     report_date = get_last_trade_day(i) 
     last_trade_date = get_last_trade_day() 
     
@@ -467,8 +450,8 @@ if __name__ == '__main__':
             # Checks
             svs.check_directory()
             svs.check_index_database() 
-	          #multi-threading download csv files for each ticker
-            svs.split_processing(svs.thread_numbers, 'yfinance')  
+	    #multi-threading download csv files for each ticker
+            svs.check_stock_database('yfinance')  
 
 	    # Select Stock
 	    # normally with overwrite = False
